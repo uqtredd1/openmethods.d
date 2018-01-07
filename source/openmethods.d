@@ -873,16 +873,16 @@ struct Runtime
 
   Metrics update()
   {
+    // Create a Method object for each method.  Create a Class object for all
+    // the classes or interfaces that occur as virtual parameters in a method,
+    // or were registered explicitly with 'registerClasses'.
+
     seed();
 
-    foreach (ci; additionalClasses) {
-      if (ci !in classMap) {
-        auto c = classMap[ci] = new Class(ci);
-        debug(explain) {
-          writefln("  %s", c.name);
-        }
-      }
-    }
+    // Create a Class object for all the classes or interfaces that derive from
+    // a class or interface that occur as virtual parameters in a method,
+    // or were registered explicitly with 'registerClasses'. Also record in
+    // each Class object all the method parameters that target it.
 
     debug(explain) {
       writefln("Scooping...");
@@ -894,11 +894,32 @@ struct Runtime
       }
 	}
 
+    // Fill the 'directBases' and 'directDerived' arrays in the Class objects.
+
     initClasses();
+
+    // Copy the Class objects to the 'classes' array, ensuring that derived
+    // classes and interface come after their base class and interfaces, but as
+    // close to them as possible.
     layer();
+
+    // Fill the 'conforming' arrays, i.e. for each class record all the classes
+    // and interfaces that are type compatible with it. Note that every class
+    // is in its own 'conforming' array.
+
     calculateInheritanceRelationships();
+
+    // Check if there are classes that define the 'delete' operator.
+
     checkDeallocatorConflicts();
+
+    // For each method, reserve one slot per virtual parameter in the target
+    // Class.
+
     allocateSlots();
+
+    // Build dispatch tables and install the global vectors.
+
     buildTables();
 
     needUpdate = false;
@@ -945,6 +966,15 @@ struct Runtime
 
     debug(explain) {
       writeln();
+    }
+
+    foreach (ci; additionalClasses) {
+      if (ci !in classMap) {
+        auto c = classMap[ci] = new Class(ci);
+        debug(explain) {
+          writefln("  %s", c.name);
+        }
+      }
     }
   }
 
@@ -1564,6 +1594,7 @@ struct Runtime
           }
         }
       }
+
       foreach (spec; m.specs) {
         auto nextSpec = findNext(spec, m.specs);
         *spec.info.nextPtr = nextSpec ? nextSpec.info.pf : null;
